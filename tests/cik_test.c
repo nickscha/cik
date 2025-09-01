@@ -30,7 +30,6 @@ void cik_test_fabrik_solver_direct(void)
 
   /* ---- Animation Setup ---- */
   v3 target = cik_v3(2.0f, 1.0f, 0.0f);
-
   float tolerance = 1e-5f; /* tolerance */
   int max_iterations = 16;
 

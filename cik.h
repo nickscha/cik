@@ -39,6 +39,7 @@ LICENSE
 #define CIK_PI_HALF 1.57079632679489661923f
 #define CIK_PI_QUARTER 0.7853981633974483f
 
+#ifndef VM_H
 typedef struct v3
 {
   float x;
@@ -46,6 +47,7 @@ typedef struct v3
   float z;
 
 } v3;
+#endif
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
