@@ -10,5 +10,6 @@ set DEF_FLAGS_LINKER=-lkernel32
 
 set SOURCE_NAME=cik_win32_nostdlib
 
+rm *.ppm
 cc -s -O2 %DEF_COMPILER_FLAGS% %SOURCE_NAME%.c -o %SOURCE_NAME%.exe %DEF_FLAGS_LINKER%
 %SOURCE_NAME%.exe
