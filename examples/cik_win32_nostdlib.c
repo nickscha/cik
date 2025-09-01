@@ -87,7 +87,7 @@ static int cube_indices[] = {
 static unsigned long cube_vertices_size = sizeof(cube_vertices) / sizeof(cube_vertices[0]);
 static unsigned long cube_indices_size = sizeof(cube_indices) / sizeof(cube_indices[0]);
 
-void *cik_binary_memcpy(void *dest, void *src, unsigned long count)
+static void *cik_binary_memcpy(void *dest, void *src, unsigned long count)
 {
   char *dest8 = (char *)dest;
   char *src8 = (char *)src;
@@ -97,6 +97,38 @@ void *cik_binary_memcpy(void *dest, void *src, unsigned long count)
   }
 
   return dest;
+}
+
+static void cik_write_ppm(pmem *memory_io, csr_context *context, int frame)
+{
+  unsigned char *ptr = memory_io->memory;
+
+  char buf[128];
+  char buf_fn[64];
+
+  sb sb, sbfn;
+
+  /* PPM Header */
+  sb_init(&sb, buf, sizeof(buf));
+  sb_append_cstr(&sb, "P6\n");
+  sb_append_ulong_direct(&sb, (unsigned long)context->width);
+  sb_append_cstr(&sb, " ");
+  sb_append_ulong_direct(&sb, (unsigned long)context->height);
+  sb_append_cstr(&sb, "\n255\n");
+  sb_term(&sb);
+
+  /* File name test_{frame}.ppm */
+  sb_init(&sbfn, buf_fn, sizeof(buf_fn));
+  sb_append_cstr(&sbfn, "test_");
+  sb_append_ulong_direct(&sbfn, (unsigned long)frame);
+  sb_append_cstr(&sbfn, ".ppm");
+  sb_term(&sbfn);
+
+  cik_binary_memcpy(ptr, buf, (unsigned long)sb.len);
+  ptr += sb.len;
+  cik_binary_memcpy(ptr, context->framebuffer, (unsigned long)(context->width * context->height * (int)sizeof(csr_color)));
+
+  pio_write(sbfn.buf, memory_io->memory, (unsigned long)(sb.len + context->width * context->height * (int)sizeof(csr_color)));
 }
 
 #ifdef __clang__
@@ -112,24 +144,19 @@ mainCRTStartup(void)
   csr_color clear_color = {40, 40, 40};
   csr_context context = {0};
 
-/* Define the render area */
-#define WIDTH 800
-#define HEIGHT 600
-#define MEMORY_SIZE (WIDTH * HEIGHT * sizeof(csr_color)) + (WIDTH * HEIGHT * sizeof(float))
-#define MEMORY_SIZE_IO (WIDTH * HEIGHT * sizeof(csr_color) + 512)
+  /* Define the render area */
+  int window_width = 800;
+  int window_height = 600;
 
   pmem memory_graphics = {0};
   pmem memory_io = {0};
 
-  memory_graphics.memory_size = MEMORY_SIZE;
-  memory_io.memory_size = MEMORY_SIZE_IO;
+  memory_graphics.memory_size = (unsigned long)((window_width * window_height * (int)sizeof(csr_color)) + (window_width * window_height * (int)sizeof(float)));
+  memory_io.memory_size = (unsigned long)((window_width * window_height * (int)sizeof(csr_color) + 512));
 
-  if (!pmem_allocate(&memory_graphics) || !pmem_allocate(&memory_io))
-  {
-    return 1;
-  }
-
-  if (!csr_init_model(&context, memory_graphics.memory, memory_graphics.memory_size, WIDTH, HEIGHT))
+  if (!pmem_allocate(&memory_graphics) ||
+      !pmem_allocate(&memory_io) ||
+      !csr_init_model(&context, memory_graphics.memory, memory_graphics.memory_size, window_width, window_height))
   {
     return 1;
   }
@@ -165,30 +192,16 @@ mainCRTStartup(void)
           cube_indices, cube_indices_size,
           model_view_projection.e);
 
-      {
-        unsigned char *ptr = memory_io.memory;
-
-        char buf[256];
-        sb sb;
-        sb_init(&sb, buf, sizeof(buf));
-        sb_append_cstr(&sb, "P6\n");
-        sb_append_ulong_direct(&sb, (unsigned long)context.width);
-        sb_append_cstr(&sb, " ");
-        sb_append_ulong_direct(&sb, (unsigned long)context.height);
-        sb_append_cstr(&sb, "\n255\n");
-        sb_term(&sb);
-
-        cik_binary_memcpy(ptr, buf, (unsigned long)sb.len);
-        ptr += sb.len;
-        cik_binary_memcpy(ptr, context.framebuffer, (unsigned long)(context.width * context.height * (int)sizeof(csr_color)));
-
-        pio_write("test.ppm", memory_io.memory, (unsigned long)(sb.len + context.width * context.height * (int)sizeof(csr_color)));
-      }
+      /* Write framebuffer to ppm file */
+      cik_write_ppm(&memory_io, &context, frame);
     }
   }
 
-  pmem_free(&memory_io);
-  pmem_free(&memory_io);
+  if (!pmem_free(&memory_io) ||
+      !pmem_free(&memory_graphics))
+  {
+    return 1;
+  }
 
   pio_print("[cik] finished\n");
 
