@@ -17,7 +17,7 @@ LICENSE
 
 #include <stdio.h>
 
-void cik_test_fabrik_solver_robot_arm(void)
+void cik_test_fabrik_solver_direct(void)
 {
   /* ---- Arm Setup ---- */
   int joint_count = 3;
@@ -29,15 +29,13 @@ void cik_test_fabrik_solver_robot_arm(void)
   float hinge_max[CIK_MAX_JOINTS];
 
   /* ---- Animation Setup ---- */
-  v3 target_start = cik_v3(2.0f, 1.0f, 0.0f);
-  v3 target_end = cik_v3(1.0f, -1.0f, 0.0f);
-  v3 target = target_start;
+  v3 target = cik_v3(2.0f, 1.0f, 0.0f);
 
-  float speed = 0.5f; /* units per second */
-  int forward = 1;
-  int step = 0;
   float tolerance = 1e-5f; /* tolerance */
   int max_iterations = 16;
+
+  int i;
+  int reached;
 
   /* Initial positions (straight arm) */
   positions[0] = cik_v3(0.0f, 0.0f, 0.0f);
@@ -57,83 +55,41 @@ void cik_test_fabrik_solver_robot_arm(void)
 
   printf("[cik][fabrik] start simulation\n");
 
-  while (1)
+  /* Solve IK */
+  PERF_PROFILE_WITH_NAME({ reached = cik_fabrik_solve(
+                               positions,
+                               joint_count,
+                               target,
+                               max_angles,
+                               hinge_types,
+                               hinge_axes,
+                               hinge_min,
+                               hinge_max,
+                               tolerance,     /* tolerance */
+                               max_iterations /* max iterations */
+                           ); }, "cik_fabrik_solve");
+
+  if (reached == 3)
   {
-    float dt = 0.16f; /* 60 FPS */
+    printf("[cik][fabrik] target unreachable, clamped at max reach\n");
+  }
+  else if (reached == 2)
+  {
+    printf("[cik][fabrik] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
+  }
+  else if (reached == 1)
+  {
+    printf("[cik][fabrik] max_iter reached (did not converge)\n");
+  }
+  else if (reached == 0)
+  {
+    /* Print joint positions */
+    printf("[cik][fabrik]  target: (%6.2f, %6.2f, %6.2f)\n", (double)target.x, (double)target.y, (double)target.z);
 
-    v3 dir;
-    float dist;
-    int i;
-    int reached;
-
-    /* Move target smoothly up and down */
-    if (forward)
+    for (i = 0; i < joint_count; ++i)
     {
-      dir = cik_v3_sub(target_end, target);
+      printf("[cik][fabrik] joint %d: (%6.2f, %6.2f, %6.2f)\n", i, (double)positions[i].x, (double)positions[i].y, (double)positions[i].z);
     }
-    else
-    {
-      dir = cik_v3_sub(target_start, target);
-    }
-
-    dist = cik_v3_length(dir);
-
-    if (dist < 0.01f)
-    {
-      forward = !forward; /* reverse direction */
-    }
-    else
-    {
-      v3 step;
-
-      dir = cik_v3_normalize(dir);
-      step = cik_v3_scale(dir, speed * dt);
-      target = cik_v3_add(target, step);
-    }
-
-    /* Solve IK */
-    PERF_PROFILE_WITH_NAME({ reached = cik_fabrik_solve(
-                                 positions,
-                                 joint_count,
-                                 target,
-                                 max_angles,
-                                 hinge_types,
-                                 hinge_axes,
-                                 hinge_min,
-                                 hinge_max,
-                                 tolerance,     /* tolerance */
-                                 max_iterations /* max iterations */
-                             ); }, "cik_fabrik_solve");
-
-    if (reached == 3)
-    {
-      printf("[cik][fabrik][%3i] target unreachable, clamped at max reach\n", step);
-      break;
-    }
-    else if (reached == 2)
-    {
-      printf("[cik][fabrik][%3i] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n", step);
-      break;
-    }
-    else if (reached == 1)
-    {
-      printf("[cik][fabrik][%3i] max_iter reached (did not converge)\n", step);
-      break;
-    }
-    else if (reached == 0)
-    {
-      /* Print joint positions */
-      printf("[cik][fabrik][%3i]  target: (%6.2f, %6.2f, %6.2f)\n", step, (double)target.x, (double)target.y, (double)target.z);
-
-      for (i = 0; i < joint_count; ++i)
-      {
-        printf("[cik][fabrik][%3i] joint %d: (%6.2f, %6.2f, %6.2f)\n", step, i, (double)positions[i].x, (double)positions[i].y, (double)positions[i].z);
-      }
-
-      break;
-    }
-
-    step++;
   }
 
   printf("[cik][fabrik] finished simulation\n");
@@ -141,7 +97,7 @@ void cik_test_fabrik_solver_robot_arm(void)
 
 int main(void)
 {
-  cik_test_fabrik_solver_robot_arm();
+  cik_test_fabrik_solver_direct();
 
   return 0;
 }

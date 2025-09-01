@@ -366,6 +366,7 @@ CIK_API CIK_INLINE void cik_fabrik_enforce_hinge(
 /* 0 = converged within tolerance
  * 1 = max_iter reached (did not converge)
  * 2 = invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)
+ * 3 = target unreachable, clamped at max reach
  */
 CIK_API CIK_INLINE int cik_fabrik_solve(
     v3 *pos,          /* [n] joint positions (in/out) */
