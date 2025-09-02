@@ -151,7 +151,7 @@ static void run(csr_context *context, pmem *memory_io)
   m4x4 projection_view = vm_m4x4_mul(projection, view);
 
   int frame;
-  int frame_count = 204;
+  int frame_count = 225;
 
   /* ---- Arm Setup ---- */
   int joint_count = 3;
@@ -170,6 +170,9 @@ static void run(csr_context *context, pmem *memory_io)
 
   float dt = 0.16f; /* 60 FPS */
   float speed = 1.0f;
+  int grapped = 0;
+  int grapped_count = 0;
+  v3 grapped_positions[64];
 
   /* Initial positions (straight arm) */
   positions[0] = cik_v3(0.0f, 0.0f, 0.0f);
@@ -199,12 +202,24 @@ static void run(csr_context *context, pmem *memory_io)
       /* When current target is reached we set a new target */
       if (cik_v3_length(cik_v3_sub(current_target, target)) < 0.05f)
       {
-        /* Once we reach the target, pick a new random target */
-        target = cik_v3(
-            ((float)(vm_randi() % 400) / 100.0f) - 2.0f, /* x: -2.0 .. +2.0 */
-            ((float)(vm_randi() % 200) / 100.0f),        /* y:  0.0 .. +2.0 */
-            ((float)(vm_randi() % 400) / 100.0f) - 2.0f  /* z: -2.0 .. +2.0 */
-        );
+        if (!grapped)
+        {
+          grapped = 1;
+          target = vm_v3(-1.0f + (0.25f * (float)grapped_count), -0.5f, 1.0f);
+          grapped_count++;
+        }
+        else
+        {
+          grapped = 0;
+          grapped_positions[grapped_count - 1] = target;
+
+          /* Once we reach the target, pick a new random target */
+          target = cik_v3(
+              ((float)(vm_randi() % 400) / 100.0f) - 2.0f, /* x: -2.0 .. +2.0 */
+              ((float)(vm_randi() % 200) / 100.0f),        /* y:  0.0 .. +2.0 */
+              ((float)(vm_randi() % 400) / 100.0f) - 2.0f  /* z: -2.0 .. +2.0 */
+          );
+        }
       }
 
       /* Slowly move the target towards the final target position for smooth animation */
@@ -259,7 +274,7 @@ static void run(csr_context *context, pmem *memory_io)
 
     /* Render target */
     {
-      m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, target), 0.25f);
+      m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, grapped ? current_target : target), 0.25f);
       m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
 
       csr_render(
@@ -269,6 +284,25 @@ static void run(csr_context *context, pmem *memory_io)
           cube_vertices, cube_vertices_size,
           cube_indices, cube_indices_size,
           model_view_projection.e, csr_init_color(255, 0, 0));
+    }
+
+    /* Render placed targets */
+    {
+      int i;
+
+      for (i = 0; i < grapped_count; ++i)
+      {
+        m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, grapped_positions[i]), 0.25f);
+        m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
+
+        csr_render(
+            context,
+            CSR_RENDER_SOLID,
+            CSR_CULLING_CCW_BACKFACE, 3,
+            cube_vertices, cube_vertices_size,
+            cube_indices, cube_indices_size,
+            model_view_projection.e, csr_init_color(220, 220, 220));
+      }
     }
 
     /* Write framebuffer to ppm file */
