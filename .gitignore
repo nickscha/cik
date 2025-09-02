@@ -1,6 +1,7 @@
 # Prerequisites
 *.d
 *.ppm
+*.mp4
 
 # Object files
 *.o

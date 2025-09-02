@@ -169,7 +169,7 @@ static void run(csr_context *context, pmem *memory_io)
   int max_iterations = 16;
 
   float dt = 0.16f; /* 60 FPS */
-  float speed = 1.0f;
+  float speed = 2.5f;
   int grapped = 0;
   int grapped_count = 0;
   v3 grapped_positions[64];
@@ -199,6 +199,8 @@ static void run(csr_context *context, pmem *memory_io)
 
     if (frame > 0)
     {
+      int solved;
+
       /* When current target is reached we set a new target */
       if (cik_v3_length(cik_v3_sub(current_target, target)) < 0.05f)
       {
@@ -225,7 +227,7 @@ static void run(csr_context *context, pmem *memory_io)
       /* Slowly move the target towards the final target position for smooth animation */
       current_target = cik_v3_lerp(current_target, target, speed * dt);
 
-      cik_fabrik_solve(
+      solved = cik_fabrik_solve(
           positions,
           joint_count,
           current_target,
@@ -237,6 +239,11 @@ static void run(csr_context *context, pmem *memory_io)
           tolerance,     /* tolerance */
           max_iterations /* max iterations */
       );
+
+      /* Target unreachable */
+      if(solved == 3) {
+        break;
+      }
     }
 
     for (i = 0; i < joint_count; ++i)
