@@ -13,3 +13,4 @@ set SOURCE_NAME=cik_win32_nostdlib
 rm *.ppm
 cc -s -O2 %DEF_COMPILER_FLAGS% %SOURCE_NAME%.c -o %SOURCE_NAME%.exe %DEF_FLAGS_LINKER%
 %SOURCE_NAME%.exe
+ffmpeg -y -framerate 30 -i test_%%d.ppm -c:v libx264 -pix_fmt yuv420p test.mp4

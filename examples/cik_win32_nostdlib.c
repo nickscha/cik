@@ -132,13 +132,18 @@ static void cik_write_ppm(pmem *memory_io, csr_context *context, int frame)
   pio_write(sbfn.buf, memory_io->memory, (unsigned long)(sb.len + context->width * context->height * (int)sizeof(csr_color)));
 }
 
+static v3 cik_v3_lerp(v3 a, v3 b, float t)
+{
+  return cik_v3_add(a, cik_v3_scale(cik_v3_sub(b, a), t));
+}
+
 static void run(csr_context *context, pmem *memory_io)
 {
   csr_color clear_color = {40, 40, 40};
 
   v3 world_up = vm_v3(0.0f, 1.0f, 0.0f);
-  v3 cam_position = vm_v3(1.5f, 1.0f, 2.0f);
-  v3 cam_look_at_pos = vm_v3(1.5f, 0.0f, 0.0f);
+  v3 cam_position = vm_v3(0.0f, 1.0f, 3.0f);
+  v3 cam_look_at_pos = vm_v3(1.0f, 0.0f, 0.0f);
   float cam_fov = 90.0f;
 
   m4x4 projection = vm_m4x4_perspective(vm_radf(cam_fov), (float)context->width / (float)context->height, 0.1f, 1000.0f);
@@ -146,7 +151,7 @@ static void run(csr_context *context, pmem *memory_io)
   m4x4 projection_view = vm_m4x4_mul(projection, view);
 
   int frame;
-  int frame_count = 2;
+  int frame_count = 204;
 
   /* ---- Arm Setup ---- */
   int joint_count = 3;
@@ -159,8 +164,12 @@ static void run(csr_context *context, pmem *memory_io)
 
   /* ---- Animation Setup ---- */
   v3 target = cik_v3(2.0f, 1.0f, 0.0f);
+  v3 current_target = cik_v3(3.0f, 0.0f, 0.0f);
   float tolerance = 1e-5f; /* tolerance */
   int max_iterations = 16;
+
+  float dt = 0.16f; /* 60 FPS */
+  float speed = 1.0f;
 
   /* Initial positions (straight arm) */
   positions[0] = cik_v3(0.0f, 0.0f, 0.0f);
@@ -187,10 +196,24 @@ static void run(csr_context *context, pmem *memory_io)
 
     if (frame > 0)
     {
+      /* When current target is reached we set a new target */
+      if (cik_v3_length(cik_v3_sub(current_target, target)) < 0.05f)
+      {
+        /* Once we reach the target, pick a new random target */
+        target = cik_v3(
+            ((float)(vm_randi() % 400) / 100.0f) - 2.0f, /* x: -2.0 .. +2.0 */
+            ((float)(vm_randi() % 200) / 100.0f),        /* y:  0.0 .. +2.0 */
+            ((float)(vm_randi() % 400) / 100.0f) - 2.0f  /* z: -2.0 .. +2.0 */
+        );
+      }
+
+      /* Slowly move the target towards the final target position for smooth animation */
+      current_target = cik_v3_lerp(current_target, target, speed * dt);
+
       cik_fabrik_solve(
           positions,
           joint_count,
-          target,
+          current_target,
           max_angles,
           hinge_types,
           hinge_axes,
@@ -201,7 +224,7 @@ static void run(csr_context *context, pmem *memory_io)
       );
     }
 
-    for (i = 0; i < 3; ++i)
+    for (i = 0; i < joint_count; ++i)
     {
       m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, positions[i]), 0.25f);
       m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
@@ -213,7 +236,7 @@ static void run(csr_context *context, pmem *memory_io)
           CSR_CULLING_CCW_BACKFACE, 3,
           cube_vertices, cube_vertices_size,
           cube_indices, cube_indices_size,
-          model_view_projection.e, csr_init_color(0, 255, 0));
+          model_view_projection.e, csr_init_color(0, 255, 65));
 
       /* Render lines connecting arms */
       if (i <= 1)
@@ -230,7 +253,7 @@ static void run(csr_context *context, pmem *memory_io)
             CSR_CULLING_CCW_BACKFACE, 3,
             cube_vertices, cube_vertices_size,
             cube_indices, cube_indices_size,
-            model_view_projection.e, csr_init_color(0, 0, 255));
+            model_view_projection.e, csr_init_color(0, 143, 17));
       }
     }
 

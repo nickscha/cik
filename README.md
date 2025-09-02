@@ -1,6 +1,10 @@
 # cik
 A C89 standard compliant, single header, nostdlib (no C Standard Library) Computational Inverse Kinematics (CIK).
 
+<p align="center">
+<a href="https://github.com/nickscha/cik"><img src="assets/cik.gif"></a>
+</p>
+
 For more information please look at the "cik.h" file or take a look at the "examples" or "tests" folder.
 
 > [!WARNING]
