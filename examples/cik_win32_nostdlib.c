@@ -215,21 +215,14 @@ static void run(csr_context *context, pmem *memory_io)
           cube_indices, cube_indices_size,
           model_view_projection.e, csr_init_color(0, 255, 0));
 
-      /* Render lines connecting arms
+      /* Render lines connecting arms */
       if (i <= 1)
       {
         v3 position = positions[i];
         v3 position_next = positions[i + 1];
-        v3 midpoint = vm_v3_mulf(vm_v3_add(position, position_next), 0.5f);
-        float distance = vm_v3_distance(position, position_next);
 
-        m4x4 translation_matrix = vm_m4x4_translate(vm_m4x4_identity, midpoint);
-        m4x4 rotation_matrix = vm_m4x4_lookAt_model(position, position_next, world_up);
-        m4x4 scale_matrix = vm_m4x4_scale(vm_m4x4_identity, vm_v3_one);
-        m4x4 model = vm_m4x4_mul(translation_matrix, vm_m4x4_mul(rotation_matrix, scale_matrix));
-        m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
-
-        (void)distance;
+        model = vm_m4x4_from_to_scaled(position, position_next, 0.05f, 0.05f);
+        model_view_projection = vm_m4x4_mul(projection_view, model);
 
         csr_render(
             context,
@@ -239,7 +232,6 @@ static void run(csr_context *context, pmem *memory_io)
             cube_indices, cube_indices_size,
             model_view_projection.e, csr_init_color(0, 0, 255));
       }
-       */
     }
 
     /* Render target */
