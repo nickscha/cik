@@ -318,11 +318,31 @@ CIK_API CIK_INLINE void cik_fabrik_enforce_hinge(
   proj = cik_v3_sub(dir, cik_v3_scale(axis, dot_ax));
   proj_len = cik_v3_length(proj);
 
-  /* If projection is degenerate, use rest_dir in plane */
+  /* If projection is degenerate, the bone is aligned with the hinge axis. */
+  /* We will use the rest_dir to define its orientation on the plane. */
   if (proj_len < 1e-8f)
   {
     proj = cik_v3_sub(rest_dir, cik_v3_scale(axis, cik_v3_dot(rest_dir, axis)));
-    proj = cik_v3_normalize(proj);
+
+    /* Check if rest_dir is also aligned with the hinge axis.
+     * If so, we must generate an arbitrary valid direction on the hinge plane.
+     */
+    if (cik_v3_length_2(proj) < 1e-8f)
+    {
+      v3 up = {0.0f, 1.0f, 0.0f};
+      /* If axis is aligned with 'up', use a different vector for the cross product */
+      if (cik_fabsf(cik_v3_dot(axis, up)) > 0.99f)
+      {
+        up.x = 1.0f;
+        up.y = 0.0f;
+        up.z = 0.0f;
+      }
+      proj = cik_v3_normalize(cik_v3_cross(axis, up));
+    }
+    else
+    {
+      proj = cik_v3_normalize(proj);
+    }
   }
   else
   {
@@ -331,7 +351,23 @@ CIK_API CIK_INLINE void cik_fabrik_enforce_hinge(
 
   /* Compute angle relative to rest_dir in hinge plane */
   rest_proj = cik_v3_sub(rest_dir, cik_v3_scale(axis, cik_v3_dot(rest_dir, axis)));
-  rest_proj = cik_v3_normalize(rest_proj);
+
+  /* Apply the same robust fallback for the rest_proj calculation */
+  if (cik_v3_length_2(rest_proj) < 1e-8f)
+  {
+    v3 up = {0.0f, 1.0f, 0.0f};
+    if (cik_fabsf(cik_v3_dot(axis, up)) > 0.99f)
+    {
+      up.x = 1.0f;
+      up.y = 0.0f;
+      up.z = 0.0f;
+    }
+    rest_proj = cik_v3_normalize(cik_v3_cross(axis, up));
+  }
+  else
+  {
+    rest_proj = cik_v3_normalize(rest_proj);
+  }
 
   cos_ang = cik_v3_dot(rest_proj, proj);
   sin_ang = cik_v3_dot(cik_v3_cross(rest_proj, proj), axis);
@@ -352,13 +388,15 @@ CIK_API CIK_INLINE void cik_fabrik_enforce_hinge(
   {
     float c = cik_cosf(angle);
     float s = cik_sinf(angle);
-    float dot = cik_v3_dot(axis, rest_proj);
+    float dot = cik_v3_dot(axis, rest_proj); /* This dot product is zero */
+
     v3 cross = cik_v3_cross(axis, rest_proj);
 
     v3 new_dir;
-    new_dir.x = rest_proj.x * c + cross.x * s + axis.x * dot * (1.0f - c);
-    new_dir.y = rest_proj.y * c + cross.y * s + axis.y * dot * (1.0f - c);
-    new_dir.z = rest_proj.z * c + cross.z * s + axis.z * dot * (1.0f - c);
+    /* Simplified Rodrigues' formula because axis and rest_proj are orthogonal */
+    new_dir.x = rest_proj.x * c + cross.x * s;
+    new_dir.y = rest_proj.y * c + cross.y * s;
+    new_dir.z = rest_proj.z * c + cross.z * s;
 
     *child = cik_v3_add(parent, cik_v3_scale(new_dir, len));
   }
