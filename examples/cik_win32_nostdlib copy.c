@@ -324,9 +324,10 @@ static void run_fabrik_arm(csr_context *context, pmem *memory_io)
 
 static void run_fabrik_mesh_builder(csr_context *context, pmem *memory_io)
 {
-#define grid_x 25
-#define grid_y 25
-#define grid_z 25
+#define grid_x 101
+#define grid_y 101
+#define grid_z 101
+  unsigned char voxels[grid_x * grid_y * grid_z];
 
   csr_color clear_color = {40, 40, 40};
 
@@ -340,62 +341,7 @@ static void run_fabrik_mesh_builder(csr_context *context, pmem *memory_io)
   m4x4 projection_view = vm_m4x4_mul(projection, view);
 
   int frame;
-  int frame_count = 250;
-
-  /* ---- Arm Setup ---- */
-  int joint_count = 4;
-  v3 positions[CIK_MAX_JOINTS];
-  v3 hinge_axes[CIK_MAX_JOINTS];
-  int hinge_types[CIK_MAX_JOINTS];
-  float max_angles[CIK_MAX_JOINTS];
-  float hinge_min[CIK_MAX_JOINTS];
-  float hinge_max[CIK_MAX_JOINTS];
-
-  /* ---- Animation Setup ---- */
-  v3 target = cik_v3(-10.0f, 0.0f, 0.0f);
-  v3 current_target = cik_v3(0.0f, (grid_y - 1) * 2.0f, 0.0f);
-  float tolerance = 0.1f; /* tolerance */
-  int max_iterations = 32;
-
-  float dt = 0.16f; /* 60 FPS */
-  float speed = 6.0f;
-
-  long last_voxel_placed_idx = 0;
-  int grapped = 0;
-  int grapped_count = 0;
-
-  unsigned char *voxels;
-  v3 *grapped_positions;
-
-  pmem memory_voxels = {0};
-  pmem memory_positions = {0};
-
-  memory_voxels.memory_size = grid_x * grid_y * grid_z;
-  memory_positions.memory_size = grid_x * grid_y * grid_z * (unsigned long)sizeof(v3);
-
-  /* Initial positions (straight arm) */
-  positions[0] = cik_v3(0.0f, 0.0f, 0.0f);
-  positions[1] = cik_v3(0.0f, (grid_y - 1) * 2.0f * 0.25f, 0.0f);
-  positions[2] = cik_v3(0.0f, (grid_y - 1) * 2.0f * 0.5f, 0.0f);
-  positions[3] = cik_v3(0.0f, (grid_y - 1) * 2.0f, 0.0f);
-
-  /* Joint constraints */
-  max_angles[0] = CIK_PI; /* allow full freedom */
-  max_angles[1] = CIK_PI; /* allow full freedom */
-  max_angles[2] = CIK_PI;
-
-  hinge_types[0] = 0;                       /* spherical joint */
-  hinge_types[1] = 0;                       /* spherical joint */
-  hinge_types[2] = 0;                       /* hinge joint */
-  hinge_axes[2] = cik_v3(0.0f, 0.0f, 1.0f); /* Z hinge */
-  hinge_min[2] = -CIK_PI;                   /* allow full swing -180° */
-  hinge_max[2] = CIK_PI;                    /* allow full swing +180° */
-
-  pmem_allocate(&memory_voxels);
-  pmem_allocate(&memory_positions);
-
-  voxels = memory_voxels.memory;
-  grapped_positions = memory_positions.memory;
+  int frame_count = 1;
 
   /* Voxelize the mesh with 1 cell padding */
   if (!mvx_voxelize_mesh(
@@ -412,169 +358,40 @@ static void run_fabrik_mesh_builder(csr_context *context, pmem *memory_io)
   /* Access voxels */
   for (frame = 0; frame < frame_count; ++frame)
   {
-    int solved;
-    int i;
+    int x, y, z;
 
     /* Clear Screen Frame and Depth Buffer */
     csr_render_clear_screen(context, clear_color);
 
-    if (frame > 0)
+    for (z = 0; z < grid_z; ++z)
     {
-      /* When current target is reached we set a new target */
-      if (cik_v3_length(cik_v3_sub(current_target, target)) < 0.1f)
+      for (y = grid_y - 1; y >= 0; --y)
       {
-        if (!grapped)
+        for (x = 0; x < grid_x; ++x)
         {
-          int x, y, z;
-          int found = 0;
+          long idx = x + y * grid_x + z * grid_x * grid_y;
 
-          grapped = 1;
-
-          for (z = 0; z < grid_z; ++z)
+          if (voxels[idx])
           {
-            if (found)
-            {
-              break;
-            }
-            for (y = grid_y - 1; y >= 0; --y)
-            {
-              if (found)
-              {
-                break;
-              }
-              for (x = 0; x < grid_x; ++x)
-              {
-                long idx = x + y * grid_x + z * grid_x * grid_y;
+            /* Voxel is set */
+            v3 voxel_position = vm_v3((float)x, (float)y, (float)z);
+            m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, voxel_position), 0.5f);
+            m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
 
-                if (voxels[idx] && idx > last_voxel_placed_idx)
-                {
-                  /* Voxel is set */
-                  v3 voxel_position = vm_v3((float)x, (float)y, (float)z);
+            csr_color head_color = csr_init_color(
+                (unsigned char)vm_randf_range(0.0f, 200.0f),
+                (unsigned char)vm_randf_range(0.0f, 200.0f),
+                (unsigned char)vm_randf_range(0.0f, 200.0f));
 
-                  target = voxel_position;
-
-                  last_voxel_placed_idx = idx;
-                  found = 1;
-                  break;
-                }
-              }
-            }
+            csr_render(
+                context,
+                CSR_RENDER_SOLID,
+                CSR_CULLING_CCW_BACKFACE, 3,
+                cube_vertices, cube_vertices_size,
+                cube_indices, cube_indices_size,
+                model_view_projection.e, head_color);
           }
-
-          grapped_count++;
         }
-        else
-        {
-          grapped = 0;
-          grapped_positions[grapped_count - 1] = target;
-          target = cik_v3(-10.0f, 0.0f, 0.0f);
-        }
-      }
-
-      /* Slowly move the target towards the final target position for smooth animation */
-      current_target = cik_v3_lerp(current_target, target, speed * dt);
-
-      solved = cik_fabrik_solve(
-          positions,
-          joint_count,
-          current_target,
-          max_angles,
-          hinge_types,
-          hinge_axes,
-          hinge_min,
-          hinge_max,
-          tolerance,     /* tolerance */
-          max_iterations /* max iterations */
-      );
-
-      /* Target unreachable */
-      if (solved == 3)
-      {
-        pio_print("[cik][fabrik] target unreachable, clamped at max reach\n");
-        break;
-      }
-      else if (solved == 2)
-      {
-        pio_print("[cik][fabrik] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
-        break;
-      }
-      else if (solved == 1)
-      {
-        pio_print("[cik][fabrik] max_iter reached (did not converge)\n");
-        break;
-      }
-    }
-
-    for (i = 0; i < joint_count; ++i)
-    {
-      m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, positions[i]), 1.0f);
-      m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
-
-      /* Render arm position */
-      csr_render(
-          context,
-          CSR_RENDER_SOLID,
-          CSR_CULLING_CCW_BACKFACE, 3,
-          cube_vertices, cube_vertices_size,
-          cube_indices, cube_indices_size,
-          model_view_projection.e, csr_init_color(0, 255, 65));
-
-      /* Render lines connecting arms */
-      if (i <= joint_count - 2)
-      {
-        v3 position = positions[i];
-        v3 position_next = positions[i + 1];
-
-        model = vm_m4x4_from_to_scaled(position, position_next, 1.0f, 1.0f);
-        model_view_projection = vm_m4x4_mul(projection_view, model);
-
-        csr_render(
-            context,
-            CSR_RENDER_SOLID,
-            CSR_CULLING_CCW_BACKFACE, 3,
-            cube_vertices, cube_vertices_size,
-            cube_indices, cube_indices_size,
-            model_view_projection.e, csr_init_color(0, 143, 17));
-      }
-    }
-
-    /* Render target */
-    {
-      m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, grapped ? current_target : target), 1.0f);
-      m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
-
-      csr_render(
-          context,
-          CSR_RENDER_SOLID,
-          CSR_CULLING_CCW_BACKFACE, 3,
-          cube_vertices, cube_vertices_size,
-          cube_indices, cube_indices_size,
-          model_view_projection.e, csr_init_color(255, 0, 0));
-    }
-
-    /* Render placed targets */
-    {
-      int i;
-
-      vm_seed_lcg = 1234;
-
-      for (i = 0; i < grapped_count; ++i)
-      {
-        m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, grapped_positions[i]), 1.0f);
-        m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
-
-        csr_color c = csr_init_color(
-            (unsigned char)vm_randf_range(0.0f, 255.0f),
-            (unsigned char)vm_randf_range(0.0f, 255.0f),
-            (unsigned char)vm_randf_range(0.0f, 255.0f));
-
-        csr_render(
-            context,
-            CSR_RENDER_SOLID,
-            CSR_CULLING_CCW_BACKFACE, 3,
-            cube_vertices, cube_vertices_size,
-            cube_indices, cube_indices_size,
-            model_view_projection.e, c);
       }
     }
 
