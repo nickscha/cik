@@ -15,4 +15,5 @@ cc -s -O2 %DEF_COMPILER_FLAGS% %SOURCE_NAME%.c -o %SOURCE_NAME%.exe %DEF_FLAGS_L
 %SOURCE_NAME%.exe
 ffmpeg -y -hide_banner -loglevel error -framerate 30 -i arm_%%d.ppm -c:v libx264 -pix_fmt yuv420p arm.mp4
 ffmpeg -y -hide_banner -loglevel error -framerate 30 -i mesh_builder_%%d.ppm -c:v libx264 -pix_fmt yuv420p mesh_builder.mp4
+ffmpeg -y -hide_banner -loglevel error -framerate 30 -i excavator_%%d.ppm -c:v libx264 -pix_fmt yuv420p excavator.mp4
 rm *.ppm

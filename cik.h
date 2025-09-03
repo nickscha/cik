@@ -510,6 +510,30 @@ CIK_API CIK_INLINE int cik_fabrik_solve(
   return 1;
 }
 
+/*
+ * Calculates the current angle of a hinge joint.
+ * bone_parent_pos: Position of the parent joint.
+ * bone_child_pos: Position of the child joint.
+ * axis: The hinge axis.
+ * rest_dir: The bone's initial, resting direction.
+ * Returns the angle in radians.
+ */
+CIK_API CIK_INLINE float cik_calculate_hinge_angle(v3 bone_parent_pos, v3 bone_child_pos, v3 axis, v3 rest_dir)
+{
+  v3 bone = cik_v3_sub(bone_child_pos, bone_parent_pos);
+  v3 dir = cik_v3_normalize(bone);
+
+  /* Project bone and rest_dir onto the hinge plane */
+  v3 proj = cik_v3_normalize(cik_v3_sub(dir, cik_v3_scale(axis, cik_v3_dot(dir, axis))));
+  v3 rest_proj = cik_v3_normalize(cik_v3_sub(rest_dir, cik_v3_scale(axis, cik_v3_dot(rest_dir, axis))));
+
+  /* Find the signed angle between them */
+  float cos_ang = cik_v3_dot(rest_proj, proj);
+  float sin_ang = cik_v3_dot(cik_v3_cross(rest_proj, proj), axis);
+
+  return cik_atan2f(sin_ang, cos_ang);
+}
+
 #endif /* CIK_H */
 
 /*

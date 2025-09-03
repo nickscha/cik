@@ -583,6 +583,192 @@ static void run_fabrik_mesh_builder(csr_context *context, pmem *memory_io)
   }
 }
 
+static void run_fabrik_excavator(csr_context *context, pmem *memory_io)
+{
+  csr_color clear_color = {40, 40, 40};
+
+  v3 world_up = vm_v3(0.0f, 1.0f, 0.0f);
+  v3 cam_position = vm_v3(0.0f, 1.0f, 3.0f);
+  v3 cam_look_at_pos = vm_v3(1.0f, 0.0f, 0.0f);
+  float cam_fov = 90.0f;
+
+  m4x4 projection = vm_m4x4_perspective(vm_radf(cam_fov), (float)context->width / (float)context->height, 0.1f, 1000.0f);
+  m4x4 view = vm_m4x4_lookAt(cam_position, cam_look_at_pos, world_up);
+  m4x4 projection_view = vm_m4x4_mul(projection, view);
+
+  int frame;
+  int frame_count = 2;
+
+#define NUM_JOINTS 4
+
+  v3 pos[NUM_JOINTS] = {
+      {0.0f, 0.0f, 0.0f}, /* Joint 0: Base (Root) */
+      {1.0f, 1.0f, 0.0f}, /* Joint 1: Boom Pivot */
+      {3.0f, 0.5f, 0.0f}, /* Joint 2: Stick Pivot */
+      {4.0f, 0.0f, 0.0f}  /* Joint 3: Bucket Pivot */
+  };
+
+  int hinge_type[NUM_JOINTS - 1];
+  v3 hinge_axis[NUM_JOINTS - 1];
+  float hinge_min[NUM_JOINTS - 1];
+  float hinge_max[NUM_JOINTS - 1];
+  float max_angle[NUM_JOINTS - 1]; /* Unused, but the function needs it */
+
+  int i;
+  v3 rest_dirs[NUM_JOINTS - 1];
+
+  /* Example: User wants to control only the Stick/Elbow (joint index 1) */
+  int controlled_joint_index = 0; /* 0=Boom, 1=Stick, 2=Bucket, -1=Full IK */
+
+  /* Store the original, full-range limits */
+  float original_hinge_min[3] = {-CIK_PI_QUARTER, 0.0f, -CIK_PI_HALF};
+  float original_hinge_max[3] = {CIK_PI_QUARTER, CIK_PI * 0.75f, CIK_PI_HALF};
+
+  /* --- DYNAMICALLY SET CONSTRAINTS BEFORE SOLVING --- */
+  float current_angle;
+  const float epsilon = 0.001f; /* A very small angle to create a tight lock */
+
+  /* Setup excavator arm */
+  {
+    /* All joints are hinges rotating around the X-axis */
+    v3 axis = {0.0f, 0.0f, 1.0f};
+
+    for (i = 0; i < NUM_JOINTS - 1; ++i)
+    {
+      hinge_type[i] = 1; /* 1 = Hinge Joint */
+      hinge_axis[i] = axis;
+    }
+
+    /* Set plausible angle limits for each joint (in radians) */
+    /* Bone 0 (Base -> Boom) */
+    hinge_min[0] = -CIK_PI_QUARTER; /* -45 degrees */
+    hinge_max[0] = CIK_PI_QUARTER;  /* +45 degrees */
+
+    /* Bone 1 (Boom -> Stick) */
+    hinge_min[1] = 0.0f;
+    hinge_max[1] = CIK_PI * 0.75f; /* 135 degrees */
+
+    /* Bone 2 (Stick -> Bucket) */
+    hinge_min[2] = -CIK_PI_HALF; /* -90 degrees */
+    hinge_max[2] = CIK_PI_HALF;  /* +90 degrees */
+  }
+
+  /* First, pre-calculate the rest directions from the initial setup */
+  for (i = 0; i < NUM_JOINTS - 1; ++i)
+  {
+    rest_dirs[i] = cik_v3_normalize(cik_v3_sub(pos[i + 1], pos[i]));
+  }
+
+  for (i = 0; i < NUM_JOINTS - 1; ++i)
+  {
+    if (controlled_joint_index == -1 || i == controlled_joint_index)
+    {
+      /* This joint is active, so give it full range of motion */
+      hinge_min[i] = original_hinge_min[i];
+      hinge_max[i] = original_hinge_max[i];
+    }
+    else
+    {
+      /* This joint is locked. Calculate its current angle. */
+      current_angle = cik_calculate_hinge_angle(pos[i], pos[i + 1], hinge_axis[i], rest_dirs[i]);
+
+      /* Set min/max to the current angle to lock it in place */
+      hinge_min[i] = current_angle - epsilon;
+      hinge_max[i] = current_angle + epsilon;
+    }
+  }
+
+  for (frame = 0; frame < frame_count; ++frame)
+  {
+    v3 target = vm_v3(3.2f, 0.4f, 0.0f);
+
+    /* Clear Screen Frame and Depth Buffer */
+    csr_render_clear_screen(context, clear_color);
+
+    if (frame > 0)
+    {
+      int solved = cik_fabrik_solve(
+          pos,
+          NUM_JOINTS,
+          target,    /* Now, you can provide a target and solve. The IK will only be able to meaningfully move the one unlocked joint. */
+          max_angle, /* Unused for hinges */
+          hinge_type,
+          hinge_axis,
+          hinge_min, /* The dynamically adjusted limits */
+          hinge_max, /* The dynamically adjusted limits */
+          0.05f,     /* Tolerance */
+          12         /* Max iterations */
+      );
+
+      /* Target unreachable */
+      if (solved == 3)
+      {
+        pio_print("[cik][fabrik] target unreachable, clamped at max reach\n");
+        break;
+      }
+      else if (solved == 2)
+      {
+        pio_print("[cik][fabrik] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
+        break;
+      }
+      else if (solved == 1)
+      {
+        pio_print("[cik][fabrik] max_iter reached (did not converge)\n");
+      }
+    }
+
+    for (i = 0; i < NUM_JOINTS; ++i)
+    {
+      m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, pos[i]), 0.25f);
+      m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
+
+      /* Render arm position */
+      csr_render(
+          context,
+          CSR_RENDER_SOLID,
+          CSR_CULLING_CCW_BACKFACE, 3,
+          cube_vertices, cube_vertices_size,
+          cube_indices, cube_indices_size,
+          model_view_projection.e, csr_init_color(0, 255, 65));
+
+      /* Render lines connecting arms */
+      if (i <= NUM_JOINTS - 2)
+      {
+        v3 position = pos[i];
+        v3 position_next = pos[i + 1];
+
+        model = vm_m4x4_from_to_scaled(position, position_next, 0.05f, 0.05f);
+        model_view_projection = vm_m4x4_mul(projection_view, model);
+
+        csr_render(
+            context,
+            CSR_RENDER_SOLID,
+            CSR_CULLING_CCW_BACKFACE, 3,
+            cube_vertices, cube_vertices_size,
+            cube_indices, cube_indices_size,
+            model_view_projection.e, csr_init_color(0, 143, 17));
+      }
+    }
+
+    /* Render target */
+    {
+      m4x4 model = vm_m4x4_scalef(vm_m4x4_translate(vm_m4x4_identity, target), 0.25f);
+      m4x4 model_view_projection = vm_m4x4_mul(projection_view, model);
+
+      csr_render(
+          context,
+          CSR_RENDER_SOLID,
+          CSR_CULLING_CCW_BACKFACE, 3,
+          cube_vertices, cube_vertices_size,
+          cube_indices, cube_indices_size,
+          model_view_projection.e, csr_init_color(255, 0, 0));
+    }
+
+    /* Write framebuffer to ppm file */
+    cik_write_ppm(memory_io, context, "excavator", frame);
+  }
+}
+
 #ifdef __clang__
 #elif __GNUC__
 __attribute((externally_visible))
@@ -614,6 +800,7 @@ mainCRTStartup(void)
 
   run_fabrik_arm(&context, &memory_io);
   run_fabrik_mesh_builder(&context, &memory_io);
+  run_fabrik_excavator(&context, &memory_io);
 
   if (!pmem_free(&memory_io) ||
       !pmem_free(&memory_graphics))
