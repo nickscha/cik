@@ -41,6 +41,56 @@ Download or clone cik.h and include it in your project.
 
 int main() {
 
+    /* ---- Arm Setup ---- */
+    int joint_count = 3;
+    v3 positions[CIK_MAX_JOINTS];
+    v3 hinge_axes[CIK_MAX_JOINTS];
+    int hinge_types[CIK_MAX_JOINTS];
+    float max_angles[CIK_MAX_JOINTS];
+    float hinge_min[CIK_MAX_JOINTS];
+    float hinge_max[CIK_MAX_JOINTS];
+    
+    v3 target = cik_v3(2.0f, 1.0f, 0.0f);
+    float tolerance = 1e-3f;
+    int max_iterations = 16;
+
+    /* Stores the result of the fabrik solver */
+    int reached;
+
+    /* Initial positions (straight arm) */
+    positions[0] = cik_v3(0.0f, 0.0f, 0.0f);
+    positions[1] = cik_v3(1.5f, 0.1f, 0.0f);
+    positions[2] = cik_v3(3.0f, 0.0f, 0.0f);
+
+    /* Joint constraints (allow full freedom) */
+    max_angles[0] = CIK_PI;
+    max_angles[1] = CIK_PI;
+    hinge_types[0] = 0;                       /* spherical joint */
+    hinge_types[1] = 0;                       /* set to 1 for hinge joint */
+    hinge_axes[1] = cik_v3(0.0f, 0.0f, 1.0f); /* not used when hinge_type = 0, Z hinge */
+    hinge_min[1] = -CIK_PI;                   /* not used when hinge_type = 0, allow full swing -180° */
+    hinge_max[1] = CIK_PI;                    /* not used when hinge_type = 0, allow full swing +180° */
+
+
+    /* Run the FABRIK solver. Return code: 
+    * 0 = converged within tolerance
+    * 1 = max_iter reached (did not converge)
+    * 2 = invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)
+    * 3 = target unreachable, clamped at max reach
+    */
+    reached = cik_fabrik_solve(
+        positions,
+        joint_count,
+        target,
+        max_angles,
+        hinge_types,
+        hinge_axes,
+        hinge_min,
+        hinge_max,
+        tolerance,     /* tolerance */
+        max_iterations /* max iterations */
+    ); 
+    
     return 0;
 }
 ```
