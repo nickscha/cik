@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set DEPS=test perf pio pmem csr vm sb
+set DEPS=test perf pio pmem csr vm sb mvx
 
 REM ===============================
 REM Check if DEPS is empty
