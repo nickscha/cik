@@ -386,17 +386,16 @@ CIK_API CIK_INLINE void cik_fabrik_enforce_hinge(
 
   /* Rotate rest_proj by clamped angle around axis */
   {
-    float c = cik_cosf(angle);
-    float s = cik_sinf(angle);
-    float dot = cik_v3_dot(axis, rest_proj); /* This dot product is zero */
+    float cos_theta = cik_cosf(angle);
+    float sin_theta = cik_sinf(angle);
 
     v3 cross = cik_v3_cross(axis, rest_proj);
 
     v3 new_dir;
     /* Simplified Rodrigues' formula because axis and rest_proj are orthogonal */
-    new_dir.x = rest_proj.x * c + cross.x * s;
-    new_dir.y = rest_proj.y * c + cross.y * s;
-    new_dir.z = rest_proj.z * c + cross.z * s;
+    new_dir.x = rest_proj.x * cos_theta + cross.x * sin_theta;
+    new_dir.y = rest_proj.y * cos_theta + cross.y * sin_theta;
+    new_dir.z = rest_proj.z * cos_theta + cross.z * sin_theta;
 
     *child = cik_v3_add(parent, cik_v3_scale(new_dir, len));
   }
