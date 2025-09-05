@@ -167,8 +167,8 @@ static void run_fabrik_arm(csr_context *context, pmem *memory_io)
   /* ---- Animation Setup ---- */
   v3 target = cik_v3(2.0f, 1.0f, 0.0f);
   v3 current_target = cik_v3(3.0f, 0.0f, 0.0f);
-  float tolerance = 1e-5f; /* tolerance */
-  int max_iterations = 16;
+  float tolerance = 1e-1f; /* tolerance */
+  int max_iterations = 32;
 
   float dt = 0.16f; /* 60 FPS */
   float speed = 2.5f;
@@ -245,7 +245,17 @@ static void run_fabrik_arm(csr_context *context, pmem *memory_io)
       /* Target unreachable */
       if (solved == 3)
       {
+        pio_print("[cik][fabrik][arm] target unreachable, clamped at max reach\n");
         break;
+      }
+      else if (solved == 2)
+      {
+        pio_print("[cik][fabrik][arm] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
+        break;
+      }
+      else if (solved == 1)
+      {
+        pio_print("[cik][fabrik][arm] max_iter reached (did not converge)\n");
       }
     }
 
@@ -490,17 +500,17 @@ static void run_fabrik_mesh_builder(csr_context *context, pmem *memory_io)
       /* Target unreachable */
       if (solved == 3)
       {
-        pio_print("[cik][fabrik] target unreachable, clamped at max reach\n");
+        pio_print("[cik][fabrik][mesh] target unreachable, clamped at max reach\n");
         break;
       }
       else if (solved == 2)
       {
-        pio_print("[cik][fabrik] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
+        pio_print("[cik][fabrik][mesh] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
         break;
       }
       else if (solved == 1)
       {
-        pio_print("[cik][fabrik] max_iter reached (did not converge)\n");
+        pio_print("[cik][fabrik][mesh] max_iter reached (did not converge)\n");
         break;
       }
     }
@@ -703,17 +713,17 @@ static void run_fabrik_excavator(csr_context *context, pmem *memory_io)
       /* Target unreachable */
       if (solved == 3)
       {
-        pio_print("[cik][fabrik] target unreachable, clamped at max reach\n");
+        pio_print("[cik][fabrik][excavator] target unreachable, clamped at max reach\n");
         break;
       }
       else if (solved == 2)
       {
-        pio_print("[cik][fabrik] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
+        pio_print("[cik][fabrik][excavator] invalid input (n < 2 or exceeds CIK_MAX_JOINTS or degenerate lengths)\n");
         break;
       }
       else if (solved == 1)
       {
-        pio_print("[cik][fabrik] max_iter reached (did not converge)\n");
+        pio_print("[cik][fabrik][excavator] max_iter reached (did not converge)\n");
       }
     }
 
