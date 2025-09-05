@@ -136,6 +136,14 @@ static void cik_write_ppm(pmem *memory_io, csr_context *context, char *name, int
 
 static v3 cik_v3_lerp(v3 a, v3 b, float t)
 {
+  if (t <= 0.0f)
+  {
+    return a;
+  }
+  if (t >= 1.0f)
+  {
+    return b;
+  }
   return cik_v3_add(a, cik_v3_scale(cik_v3_sub(b, a), t));
 }
 
