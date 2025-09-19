@@ -18,17 +18,15 @@ LICENSE
 /* Check if using C99 or later (inline is supported) */
 #if __STDC_VERSION__ >= 199901L
 #define CIK_INLINE inline
-#define CIK_API static
 #elif defined(__GNUC__) || defined(__clang__)
 #define CIK_INLINE __inline__
-#define CIK_API static
 #elif defined(_MSC_VER)
 #define CIK_INLINE __inline
-#define CIK_API static
 #else
 #define CIK_INLINE
-#define CIK_API static
 #endif
+
+#define CIK_API static
 
 #ifndef CIK_MAX_JOINTS
 #define CIK_MAX_JOINTS 128
